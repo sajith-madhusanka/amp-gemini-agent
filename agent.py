@@ -60,10 +60,15 @@ Tone: professional, concise, and technically precise.
 
 
 def build_agent(cfg: Config) -> Any:
+    # AMP injects the gateway context URL (e.g. http://host:port/{uuid}).
+    # Gemini's OpenAI-compatible endpoint lives at /v1beta/openai relative to
+    # the bare domain, so we append that path so the SDK resolves
+    # {base_url}/chat/completions correctly through the gateway.
+    base_url = cfg.llm_url.rstrip("/") + "/v1beta/openai"
     llm = ChatOpenAI(
         model=cfg.gemini_model,
         temperature=0,
-        base_url=cfg.llm_url,
+        base_url=base_url,
         api_key="not-used",
         http_client=httpx.Client(transport=_StripAuthTransport()),
         default_headers={"API-Key": cfg.llm_api_key},
