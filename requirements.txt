@@ -8,6 +8,7 @@ langgraph==1.2.0
 fastapi==0.136.1
 uvicorn[standard]==0.47.0
 pydantic==2.13.4
+httpx>=0.27.0
 
 # wrapt 1.x required — AMP's opentelemetry-instrumentation-langchain 0.62b0
 # uses wrap_function_wrapper with keyword args dropped in wrapt 2.x
