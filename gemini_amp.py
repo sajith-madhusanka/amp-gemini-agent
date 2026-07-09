@@ -39,7 +39,7 @@ class GeminiAMPChat(BaseChatModel):
     model_name: str
     temperature: float = 0.0
     bound_tools: List[dict] = Field(default_factory=list)
-    max_retries: int = 3
+    max_retries: int = 5
 
     def bind_tools(
         self,
@@ -133,7 +133,7 @@ class GeminiAMPChat(BaseChatModel):
         return system_instruction, contents
 
     def _post_with_retry(self, url: str, payload: dict) -> httpx.Response:
-        delay = 5.0
+        delay = 60.0
         for attempt in range(self.max_retries + 1):
             resp = httpx.post(
                 url,
@@ -147,11 +147,15 @@ class GeminiAMPChat(BaseChatModel):
             if resp.status_code != 429 or attempt == self.max_retries:
                 resp.raise_for_status()
                 return resp
-            # Respect Retry-After if provided, else use exponential backoff
+            # Respect Retry-After if provided (handles "60", "4.5", "60.0"),
+            # else wait long enough for the per-minute quota window to reset.
             retry_after = resp.headers.get("retry-after") or resp.headers.get("x-ratelimit-reset-requests")
-            wait = float(retry_after) if retry_after and retry_after.isdigit() else delay
+            try:
+                wait = float(retry_after) if retry_after else delay
+            except ValueError:
+                wait = delay
             time.sleep(wait)
-            delay = min(delay * 2, 60.0)
+            delay = min(delay * 2, 120.0)
         resp.raise_for_status()
         return resp
 
