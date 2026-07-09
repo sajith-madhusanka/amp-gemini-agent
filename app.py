@@ -52,10 +52,10 @@ def health() -> dict[str, str]:
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
+async def chat(req: ChatRequest) -> ChatResponse:
     log.info("chat | session=%s | message=%.80s", req.session_id, req.message)
     try:
-        result = AGENT.invoke({"messages": [HumanMessage(content=req.message)]})
+        result = await AGENT.ainvoke({"messages": [HumanMessage(content=req.message)]})
     except Exception as exc:
         log.exception("agent invocation failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
