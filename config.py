@@ -1,19 +1,28 @@
 """Configuration loaded from environment variables at startup.
 
-Direct Gemini mode (default):
-  Set GEMINI_API_KEY to your Google AI Studio key.
-  Model defaults to gemini-2.0-flash (free tier).
+Mode is auto-detected from whichever credentials are present:
 
-AMP LLM provider mode:
-  Set USE_LLM_PROVIDER=true and provide LLM_PROVIDER_URL / LLM_PROVIDER_KEY.
-  The AMP platform exposes an OpenAI-compatible proxy for any registered provider,
-  so no code changes are needed when switching providers in the console.
+  1. AMP LLM provider (highest priority):
+     LLM_PROVIDER_URL and LLM_PROVIDER_KEY are both set.
+     The AMP console injects these when you bind an LLM provider to the agent
+     via Configure → Add LLM Provider → Environment Variable References.
+     USE_LLM_PROVIDER=true is also accepted but not required.
+
+  2. Direct Gemini (fallback):
+     GEMINI_API_KEY is set (Google AI Studio key, free tier).
+     Calls Gemini via its OpenAI-compatible endpoint — no extra package needed.
+
+If neither set of credentials is present the agent fails fast at startup
+with a clear message.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
+
+log = logging.getLogger("wso2-support-agent")
 
 
 def _env(name: str, default: str | None = None) -> str:
@@ -35,39 +44,40 @@ class Config:
 
     @classmethod
     def from_env(cls) -> "Config":
-        use_llm_provider = _env("USE_LLM_PROVIDER", "false").lower() == "true"
-        llm_provider_url = _env("LLM_PROVIDER_URL", "")
-        llm_provider_key = _env("LLM_PROVIDER_KEY", "")
+        llm_provider_url = os.environ.get("LLM_PROVIDER_URL", "").strip()
+        llm_provider_key = os.environ.get("LLM_PROVIDER_KEY", "").strip()
+        gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
-        if use_llm_provider:
-            if not llm_provider_url:
-                raise RuntimeError(
-                    "USE_LLM_PROVIDER=true but LLM_PROVIDER_URL is not set"
-                )
-            if not llm_provider_key:
-                raise RuntimeError(
-                    "USE_LLM_PROVIDER=true but LLM_PROVIDER_KEY is not set"
-                )
+        # Auto-detect mode: use AMP provider if both URL and key are present,
+        # regardless of whether USE_LLM_PROVIDER flag was explicitly set.
+        use_llm_provider = bool(llm_provider_url and llm_provider_key)
 
-        gemini_api_key = _env("GEMINI_API_KEY", "")
         if not use_llm_provider and not gemini_api_key:
             raise RuntimeError(
-                "Either set GEMINI_API_KEY for direct Gemini access, "
-                "or set USE_LLM_PROVIDER=true with LLM_PROVIDER_URL and LLM_PROVIDER_KEY"
+                "No LLM credentials found. Set one of:\n"
+                "  • GEMINI_API_KEY — for direct Gemini access (free tier)\n"
+                "  • LLM_PROVIDER_URL + LLM_PROVIDER_KEY — for AMP LLM provider\n"
+                "    (configure via Agent → Configure → LLM Provider → "
+                "Environment Variable References in the AMP console)"
             )
 
-        raw_max = _env("MAX_RESULTS", "5")
+        raw_max = os.environ.get("MAX_RESULTS", "5")
         try:
             max_results = int(raw_max)
         except ValueError:
-            raise RuntimeError(f"MAX_RESULTS must be an integer, got: {raw_max!r}") from None
+            raise RuntimeError(
+                f"MAX_RESULTS must be an integer, got: {raw_max!r}"
+            ) from None
+
+        mode = "amp-llm-provider" if use_llm_provider else "gemini-direct"
+        log.info("LLM mode: %s", mode)
 
         return cls(
             gemini_api_key=gemini_api_key,
-            gemini_model=_env("GEMINI_MODEL", "gemini-2.0-flash"),
+            gemini_model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
             use_llm_provider=use_llm_provider,
             llm_provider_url=llm_provider_url,
             llm_provider_key=llm_provider_key,
-            agent_name=_env("AGENT_NAME", "WSO2 Support Assistant"),
+            agent_name=os.environ.get("AGENT_NAME", "WSO2 Support Assistant"),
             max_results=max_results,
         )
