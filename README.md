@@ -5,7 +5,9 @@ WSO2 product support questions using a curated knowledge base. Built as a
 **Chat Agent** for [WSO2 Agent Manager Platform (AMP)](https://wso2.github.io/agent-manager/docs/v0.18.x/).
 
 Uses **Google Gemini** (free tier via Google AI Studio) as the LLM — no paid
-OpenAI subscription required.
+OpenAI subscription required. Connects via Gemini's built-in
+[OpenAI-compatible endpoint](https://ai.google.dev/gemini-api/docs/openai),
+so no extra packages beyond `langchain-openai` are needed.
 
 ---
 

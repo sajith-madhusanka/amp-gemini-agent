@@ -1,7 +1,6 @@
 # Core LangChain ecosystem — pinned for AMP's auto-instrumentation compatibility
 langchain==1.3.0
 langchain-core==1.4.0
-langchain-google-genai==2.0.0
 langchain-openai==1.2.1
 langgraph==1.2.0
 

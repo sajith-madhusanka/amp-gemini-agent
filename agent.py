@@ -1,21 +1,28 @@
 """LangGraph ReAct agent construction.
 
 Two operating modes:
-  - Direct Gemini: uses ChatGoogleGenerativeAI with GEMINI_API_KEY.
-  - AMP LLM Provider: uses ChatOpenAI pointed at the AMP provider proxy
-    (OpenAI-compatible endpoint). Switch by setting USE_LLM_PROVIDER=true
-    in the agent's environment variables on the AMP console.
+  - Direct Gemini: uses langchain-openai pointed at Google's OpenAI-compatible
+    endpoint (https://generativelanguage.googleapis.com/v1beta/openai/).
+    Requires only GEMINI_API_KEY — no extra package needed.
+  - AMP LLM Provider: uses the same ChatOpenAI class pointed at the AMP provider
+    proxy. Switch by setting USE_LLM_PROVIDER=true in the AMP console.
+
+Using the OpenAI-compatible Gemini endpoint avoids the langchain-google-genai
+package, which currently requires langchain-core<0.4 and conflicts with the
+langchain-core 1.x series used by langchain and langgraph.
 """
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
+from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from config import Config
 from tools import build_tools
+
+GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 SYSTEM_PROMPT = """\
 You are a knowledgeable WSO2 technical support assistant. You help WSO2 customers
@@ -47,7 +54,6 @@ Tone: professional, concise, and technically precise.
 
 def build_agent(cfg: Config) -> Any:
     if cfg.use_llm_provider:
-        from langchain_openai import ChatOpenAI
         llm = ChatOpenAI(
             model="default",
             temperature=0,
@@ -59,12 +65,13 @@ def build_agent(cfg: Config) -> Any:
             },
         )
     else:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        os.environ.setdefault("GOOGLE_API_KEY", cfg.gemini_api_key)
-        llm = ChatGoogleGenerativeAI(
+        # Gemini's OpenAI-compatible endpoint — no extra package required.
+        # See: https://ai.google.dev/gemini-api/docs/openai
+        llm = ChatOpenAI(
             model=cfg.gemini_model,
             temperature=0,
-            google_api_key=cfg.gemini_api_key,
+            base_url=GEMINI_OPENAI_BASE_URL,
+            api_key=cfg.gemini_api_key,
         )
 
     tools = build_tools(cfg)
