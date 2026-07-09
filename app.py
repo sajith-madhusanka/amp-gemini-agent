@@ -23,9 +23,8 @@ log = logging.getLogger("wso2-support-agent")
 CONFIG = Config.from_env()
 AGENT = build_agent(CONFIG)
 log.info(
-    "WSO2 Support Agent ready | model=%s | llm_provider=%s",
-    CONFIG.gemini_model if not CONFIG.use_llm_provider else "amp-provider",
-    "amp" if CONFIG.use_llm_provider else "gemini-direct",
+    "WSO2 Support Agent ready | model=%s",
+    CONFIG.gemini_model,
 )
 
 
