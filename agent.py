@@ -54,15 +54,15 @@ Tone: professional, concise, and technically precise.
 
 def build_agent(cfg: Config) -> Any:
     if cfg.use_llm_provider:
+        # The AMP LLM proxy gateway authenticates via Authorization: Bearer {key}.
+        # Pass the key as api_key so the OpenAI SDK sets that header correctly.
+        # The model name is forwarded to the provider as-is; use the same model
+        # name configured in the AMP LLM provider (e.g. gemini-2.0-flash).
         llm = ChatOpenAI(
-            model="default",
+            model=cfg.gemini_model,
             temperature=0,
             base_url=cfg.llm_provider_url,
-            api_key="not-used",
-            default_headers={
-                "API-Key": cfg.llm_provider_key,
-                "Authorization": "",
-            },
+            api_key=cfg.llm_provider_key,
         )
     else:
         # Gemini's OpenAI-compatible endpoint — no extra package required.
