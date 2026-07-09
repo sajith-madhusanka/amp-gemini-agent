@@ -16,11 +16,31 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from config import Config
 from tools import build_tools
+
+
+class _StripAuthTransport(httpx.HTTPTransport):
+    """Strip the OpenAI SDK's auto-injected Bearer token at the transport layer.
+
+    The AMP LLM proxy gateway authenticates via the 'API-Key' header (see
+    llm_proxy_provisioner.go Security.APIKey.Key == "API-Key"). The OpenAI SDK
+    always adds 'Authorization: Bearer {api_key}' even when default_headers
+    tries to override it (auth_headers are merged AFTER default_headers). An
+    invalid Bearer token causes some gateway implementations to return 401
+    before checking other headers, so we strip it entirely here.
+    """
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        try:
+            del request.headers["authorization"]
+        except KeyError:
+            pass
+        return super().handle_request(request)
 
 GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
@@ -54,15 +74,16 @@ Tone: professional, concise, and technically precise.
 
 def build_agent(cfg: Config) -> Any:
     if cfg.use_llm_provider:
-        # The AMP LLM proxy gateway authenticates via Authorization: Bearer {key}.
-        # Pass the key as api_key so the OpenAI SDK sets that header correctly.
-        # The model name is forwarded to the provider as-is; use the same model
-        # name configured in the AMP LLM provider (e.g. gemini-2.0-flash).
+        # AMP gateway expects API-Key header (not Bearer). Pass the key via
+        # default_headers and suppress the SDK's auto-injected Bearer token by
+        # using _StripAuthTransport so the gateway only sees API-Key.
         llm = ChatOpenAI(
             model=cfg.gemini_model,
             temperature=0,
             base_url=cfg.llm_provider_url,
-            api_key=cfg.llm_provider_key,
+            api_key="not-used",
+            http_client=httpx.Client(transport=_StripAuthTransport()),
+            default_headers={"API-Key": cfg.llm_provider_key},
         )
     else:
         # Gemini's OpenAI-compatible endpoint — no extra package required.
