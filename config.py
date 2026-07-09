@@ -48,17 +48,29 @@ class Config:
         llm_provider_key = os.environ.get("LLM_PROVIDER_KEY", "").strip()
         gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
-        # Auto-detect mode: use AMP provider if both URL and key are present,
-        # regardless of whether USE_LLM_PROVIDER flag was explicitly set.
-        use_llm_provider = bool(llm_provider_url and llm_provider_key)
+        # Mode priority:
+        #   1. Direct Gemini  — when GEMINI_API_KEY is present (always preferred;
+        #      guaranteed to work with a valid Google AI Studio key).
+        #   2. AMP LLM proxy  — when LLM_PROVIDER_URL + LLM_PROVIDER_KEY are both
+        #      set AND GEMINI_API_KEY is absent. The proxy key must have been
+        #      provisioned via AMP model config (Agent → Configure → Add LLM
+        #      Provider → map "apikey" → LLM_PROVIDER_KEY). A manually-pasted
+        #      Gemini key in LLM_PROVIDER_KEY will not work here.
+        #
+        # If you have both vars set but keep hitting 401 from the AMP gateway,
+        # just add GEMINI_API_KEY to your deploy config — direct mode will take
+        # over automatically.
+        use_llm_provider = (
+            bool(llm_provider_url and llm_provider_key) and not gemini_api_key
+        )
 
         if not use_llm_provider and not gemini_api_key:
             raise RuntimeError(
                 "No LLM credentials found. Set one of:\n"
-                "  • GEMINI_API_KEY — for direct Gemini access (free tier)\n"
+                "  • GEMINI_API_KEY — for direct Gemini access (free tier, always works)\n"
                 "  • LLM_PROVIDER_URL + LLM_PROVIDER_KEY — for AMP LLM provider\n"
-                "    (configure via Agent → Configure → LLM Provider → "
-                "Environment Variable References in the AMP console)"
+                "    (these must be injected via Agent → Configure → Add LLM Provider\n"
+                "    → Environment Variable References, NOT manually entered)\n"
             )
 
         raw_max = os.environ.get("MAX_RESULTS", "5")
@@ -71,6 +83,9 @@ class Config:
 
         mode = "amp-llm-provider" if use_llm_provider else "gemini-direct"
         log.info("LLM mode: %s", mode)
+        if use_llm_provider:
+            key_preview = (llm_provider_key[:8] + "…") if len(llm_provider_key) > 8 else llm_provider_key
+            log.info("LLM provider URL: %s | key prefix: %s", llm_provider_url, key_preview)
 
         return cls(
             gemini_api_key=gemini_api_key,
