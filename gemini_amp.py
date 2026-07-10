@@ -15,8 +15,11 @@ Flow:
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, List, Optional, Sequence, Union
+
+log = logging.getLogger(__name__)
 
 import httpx
 from langchain_core.language_models import BaseChatModel
@@ -147,6 +150,7 @@ class GeminiAMPChat(BaseChatModel):
     def _post_with_retry(self, url: str, payload: dict) -> httpx.Response:
         delay = 60.0
         for attempt in range(self.max_retries + 1):
+            log.info("Gemini request attempt=%d contents=%d", attempt, len(payload.get("contents", [])))
             resp = httpx.post(
                 url,
                 json=payload,
@@ -157,6 +161,8 @@ class GeminiAMPChat(BaseChatModel):
                 timeout=120.0,
             )
             if resp.status_code != 429 or attempt == self.max_retries:
+                if not resp.is_success:
+                    log.error("Gemini %d body: %s", resp.status_code, resp.text[:1000])
                 resp.raise_for_status()
                 return resp
             # Respect Retry-After if provided (handles "60", "4.5", "60.0"),
