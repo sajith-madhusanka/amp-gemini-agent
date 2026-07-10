@@ -106,20 +106,30 @@ class GeminiAMPChat(BaseChatModel):
                 i += 1
 
             elif isinstance(msg, AIMessage):
-                parts = self._text_parts(msg.content)
+                # Always populate the id→name map for ToolMessage resolution.
                 for tc in (msg.tool_calls or []):
-                    tc_name = tc["name"]
                     tc_id = tc.get("id") or ""
                     if tc_id:
-                        tc_id_to_name[tc_id] = tc_name
-                    parts.append({
-                        "functionCall": {
-                            "name": tc_name,
-                            "args": tc.get("args", {}),
-                        }
-                    })
-                if parts:
-                    contents.append({"role": "model", "parts": parts})
+                        tc_id_to_name[tc_id] = tc["name"]
+
+                # Gemini 2.5 thinking models embed a thought_signature in each
+                # functionCall part. Replaying a reconstructed functionCall
+                # without that blob causes a 400. We store the raw Gemini parts
+                # in additional_kwargs when we receive them and replay verbatim.
+                raw_parts = msg.additional_kwargs.get("gemini_raw_parts")
+                if raw_parts:
+                    contents.append({"role": "model", "parts": raw_parts})
+                else:
+                    parts = self._text_parts(msg.content)
+                    for tc in (msg.tool_calls or []):
+                        parts.append({
+                            "functionCall": {
+                                "name": tc["name"],
+                                "args": tc.get("args", {}),
+                            }
+                        })
+                    if parts:
+                        contents.append({"role": "model", "parts": parts})
                 i += 1
 
             elif isinstance(msg, ToolMessage):
@@ -220,9 +230,14 @@ class GeminiAMPChat(BaseChatModel):
                     "type": "tool_call",
                 })
 
+        # Store raw Gemini parts so thought_signature (Gemini 2.5 thinking
+        # models) is preserved for the next conversation turn.
+        extra: dict = {"gemini_raw_parts": raw_parts} if tool_calls else {}
+
         ai_msg = AIMessage(
             content="".join(text_parts),
             tool_calls=tool_calls,
+            additional_kwargs=extra,
         )
         return ChatResult(generations=[ChatGeneration(message=ai_msg)])
 
