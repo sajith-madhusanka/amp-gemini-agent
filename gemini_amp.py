@@ -82,6 +82,9 @@ class GeminiAMPChat(BaseChatModel):
     ) -> tuple[Optional[dict], list]:
         system_instruction = None
         contents: list = []
+        # LangGraph may leave ToolMessage.name=None; track id→name from
+        # AIMessage tool_calls so the functionResponse name always matches.
+        tc_id_to_name: dict[str, str] = {}
         i = 0
 
         while i < len(messages):
@@ -102,9 +105,13 @@ class GeminiAMPChat(BaseChatModel):
             elif isinstance(msg, AIMessage):
                 parts = self._text_parts(msg.content)
                 for tc in (msg.tool_calls or []):
+                    tc_name = tc["name"]
+                    tc_id = tc.get("id") or ""
+                    if tc_id:
+                        tc_id_to_name[tc_id] = tc_name
                     parts.append({
                         "functionCall": {
-                            "name": tc["name"],
+                            "name": tc_name,
                             "args": tc.get("args", {}),
                         }
                     })
@@ -118,9 +125,14 @@ class GeminiAMPChat(BaseChatModel):
                 fn_parts: list = []
                 while i < len(messages) and isinstance(messages[i], ToolMessage):
                     tm = messages[i]
+                    # Prefer the explicit name; fall back to the id→name map
+                    # built above so the name always matches the functionCall.
+                    fn_name = tm.name or tc_id_to_name.get(
+                        getattr(tm, "tool_call_id", ""), "tool"
+                    )
                     fn_parts.append({
                         "functionResponse": {
-                            "name": tm.name or "tool",
+                            "name": fn_name,
                             "response": {"output": str(tm.content)},
                         }
                     })
