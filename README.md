@@ -120,6 +120,24 @@ key — no manual secret management needed.
 
 Build takes ~3–5 minutes. Monitor progress in the **Builds** tab.
 
+### Step 7 — Get the endpoint URL
+
+Once the build completes, deploy from the **Deploy** tab:
+
+1. In the AMP console, open your agent and click the **Deploy** tab.
+2. Expand the environment card (e.g. **Development**) and click **Deploy** if not already deployed.
+3. Wait for the status badge to show **Active**.
+4. The agent's invoke URL appears in a read-only **URL** field with a copy button. It looks like:
+   ```
+   https://<gateway-host>/orgs/<org>/projects/<project>/agents/<agent>/v1
+   ```
+5. Copy that URL — append `/chat` for the chat endpoint, e.g.:
+   ```
+   POST https://<gateway-host>/orgs/<org>/projects/<project>/agents/<agent>/v1/chat
+   ```
+
+> **Tip:** If the URL field is missing or the Deploy tab shows "Not deployed", make sure your build completed successfully in the **Builds** tab first. The URL only appears after the first successful deployment.
+
 ---
 
 ## Project structure
@@ -127,11 +145,12 @@ Build takes ~3–5 minutes. Monitor progress in the **Builds** tab.
 ```
 amp-gemini-agent/
 ├── Dockerfile         # Docker build (python:3.11.9-slim from Docker Hub)
+├── openapi.yaml       # OpenAPI spec — OpenChoreo uses this to register endpoints
 ├── main.py            # uvicorn entrypoint
 ├── app.py             # FastAPI app: POST /chat, GET /health
 ├── agent.py           # LangGraph ReAct agent — wires GeminiAMPChat + tools
 ├── gemini_amp.py      # Custom BaseChatModel: native Gemini API via AMP gateway
-├── config.py          # Reads WSO2_SUPPORT_ASSISTANT_1_URL/API_KEY at startup
+├── config.py          # Dynamic LLM credential discovery at startup
 ├── tools.py           # Five LangChain tool definitions
 ├── knowledge_base.py  # In-memory WSO2 knowledge base (issues, errors, compat, docs)
 ├── requirements.txt   # langchain, langgraph, fastapi, httpx — no langchain-openai
