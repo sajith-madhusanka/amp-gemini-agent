@@ -3,9 +3,9 @@
 Uses GeminiAMPChat — a custom BaseChatModel that calls the native Gemini
 generateContent API through the AMP LLM proxy gateway.
 
-AMP injects two env vars:
-  WSO2_SUPPORT_ASSISTANT_1_URL     — gateway context URL
-  WSO2_SUPPORT_ASSISTANT_1_API_KEY — gateway API key
+AMP injects LLM provider credentials as {MAPPING_NAME_UPPER}_URL and
+{MAPPING_NAME_UPPER}_API_KEY. config.py discovers these dynamically so the
+agent works regardless of how the LLM provider mapping is named.
 
 The gateway validates the API-Key header, then proxies the request to
 https://generativelanguage.googleapis.com and injects the actual Gemini
