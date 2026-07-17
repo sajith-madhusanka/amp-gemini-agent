@@ -26,13 +26,18 @@ AMP LLM Proxy Gateway  ──── injects x-goog-api-key: {gemini_key} ──�
 
 The agent uses the **native Gemini generateContent API** (not the OpenAI-compatible
 endpoint). This is required because AMP's Gemini provider template injects upstream
-auth via `x-goog-api-key`, which only the native API accepts. AMP automatically
-injects two environment variables into the agent at runtime:
+auth via `x-goog-api-key`, which only the native API accepts. AMP automatically injects the LLM provider credentials at runtime using the
+mapping name as a prefix:
 
-| Variable | Description |
-|----------|-------------|
-| `WSO2_SUPPORT_ASSISTANT_1_URL` | AMP gateway context URL for the LLM proxy |
-| `WSO2_SUPPORT_ASSISTANT_1_API_KEY` | Gateway API key for authenticating to the proxy |
+| Variable pattern | Description |
+|-----------------|-------------|
+| `{MAPPING_NAME_UPPER}_URL` | AMP gateway context URL for the LLM proxy |
+| `{MAPPING_NAME_UPPER}_API_KEY` | Gateway API key for authenticating to the proxy |
+
+For example, if the LLM provider mapping is named **WSO2 Support Assistant 1**,
+AMP injects `WSO2_SUPPORT_ASSISTANT_1_URL` and `WSO2_SUPPORT_ASSISTANT_1_API_KEY`.
+The agent discovers these automatically regardless of the mapping name, so
+renaming the agent or the LLM provider connection does not require any code changes.
 
 ---
 
@@ -100,15 +105,14 @@ In your project, go to **Agents → Add Agent → Platform-Hosted → Source Cod
 ### Step 4 — Add a model configuration
 
 Under **Model Configuration**, link the agent to the Gemini LLM provider you
-registered in Step 1. AMP will automatically inject:
-- `WSO2_SUPPORT_ASSISTANT_1_URL` — the gateway proxy URL
-- `WSO2_SUPPORT_ASSISTANT_1_API_KEY` — the gateway API key
+registered in Step 1. AMP will automatically inject the gateway URL and API
+key — no manual secret management needed.
 
 ### Step 5 — Optional environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model ID |
+| `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model ID. Use `gemini-flash-lite-latest` if you are a new user — it has a generous free quota and lower latency. |
 | `AGENT_NAME` | `WSO2 Support Assistant` | Display name logged at startup |
 | `MAX_RESULTS` | `5` | Max knowledge base results per tool call |
 
@@ -145,9 +149,11 @@ arrive in one request. Retries on `429 Too Many Requests` with exponential backo
 (5 s → 10 s → 20 s, up to 3 retries), respecting the `Retry-After` header.
 
 **`config.py`**  
-Reads `WSO2_SUPPORT_ASSISTANT_1_URL` and `WSO2_SUPPORT_ASSISTANT_1_API_KEY` from
-the environment. These are injected by AMP when the agent has a model configuration
-linked to an LLM provider — no manual secret management needed.
+Discovers LLM provider credentials at startup by scanning for the `*_URL` /
+`*_API_KEY` pair that AMP injects (pattern: `{MAPPING_NAME_UPPER}_URL` and
+`{MAPPING_NAME_UPPER}_API_KEY`). Only a pair where both vars exist is accepted,
+avoiding false positives from other `*_URL` vars in the environment. Set
+`LLM_PROVIDER_URL` / `LLM_PROVIDER_KEY` to override discovery explicitly.
 
 ---
 
@@ -175,16 +181,23 @@ GET /health  →  { "status": "ok", "agent": "WSO2 Support Assistant" }
 ## Local development
 
 The agent requires an AMP LLM proxy URL and gateway key to call Gemini. For local
-testing, you can run AMP locally and obtain the injected values from the agent's
-environment, or point directly at Gemini using a thin proxy.
+testing, run AMP locally and obtain the injected values from the agent's
+environment, or set the stable override vars directly:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Set the two vars AMP would normally inject:
+# Option A — use the stable override vars (recommended for local dev):
+export LLM_PROVIDER_URL=<gateway-context-url>
+export LLM_PROVIDER_KEY=<gateway-api-key>
+
+# Option B — set the AMP-style vars with whatever mapping name was used:
 export WSO2_SUPPORT_ASSISTANT_1_URL=<gateway-context-url>
 export WSO2_SUPPORT_ASSISTANT_1_API_KEY=<gateway-api-key>
+
+# Optional: override the Gemini model (use gemini-flash-lite-latest for free-tier accounts):
+export GEMINI_MODEL=gemini-flash-lite-latest
 
 python main.py
 ```
